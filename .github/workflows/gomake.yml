@@ -1,0 +1,20 @@
+name: go-make
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+  pull_request:
+    branches: [ "main" ]
+    paths-ignore:
+      - '**.md'
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    - name: build provider
+      run: make

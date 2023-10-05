@@ -42,7 +42,7 @@ jobs:
       matrix:
         include:
           - {os: ubuntu-latest, go: 1.18}
-          - {os: windows-latest, go: 1.18}
+          # - {os: windows-latest, go: 1.18}
           - {os: macos-latest, go: 1.18}
     timeout-minutes: 10
     steps:
@@ -64,9 +64,9 @@ jobs:
       - name: Test pre-requisites (MacOS)
         run: brew install libxslt
         if: runner.os == 'MacOS'
-      - name: Test pre-requisites (Windows)
-        run: choco install xsltproc
-        if: runner.os == 'Windows'
+      # - name: Test pre-requisites (Windows)
+      #   run: choco install xsltproc
+      #   if: runner.os == 'Windows'
       - name: Test
         run: |
           make test

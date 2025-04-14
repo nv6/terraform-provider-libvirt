@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -37,6 +38,7 @@ func (i *localImage) Size() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
+	defer file.Close()
 
 	fi, err := file.Stat()
 	if err != nil {
@@ -45,13 +47,14 @@ func (i *localImage) Size() (uint64, error) {
 	return uint64(fi.Size()), nil
 }
 
-//nolint:gomnd
+//nolint:mnd
 func (i *localImage) IsQCOW2() (bool, error) {
 	file, err := os.Open(i.path)
-	defer file.Close()
 	if err != nil {
 		return false, fmt.Errorf("error while opening %s: %w", i.path, err)
 	}
+	defer file.Close()
+
 	buf := make([]byte, 8)
 	_, err = io.ReadAtLeast(file, buf, 8)
 	if err != nil {
@@ -60,12 +63,12 @@ func (i *localImage) IsQCOW2() (bool, error) {
 	return isQCOW2Header(buf)
 }
 
-func (i *localImage) Import(copier func(io.Reader) error, vol libvirtxml.StorageVolume) error {
+func (i *localImage) Import(uploader func(io.Reader) error, vol libvirtxml.StorageVolume) error {
 	file, err := os.Open(i.path)
-	defer file.Close()
 	if err != nil {
 		return fmt.Errorf("error while opening %s: %w", i.path, err)
 	}
+	defer file.Close()
 
 	fi, err := file.Stat()
 	if err != nil {
@@ -79,7 +82,7 @@ func (i *localImage) Import(copier func(io.Reader) error, vol libvirtxml.Storage
 		}
 	}
 
-	return copier(file)
+	return uploader(file)
 }
 
 type httpImage struct {
@@ -124,41 +127,11 @@ func (i *httpImage) Size() (uint64, error) {
 	return uint64(length), nil
 }
 
-//nolint:gomnd
 func (i *httpImage) IsQCOW2() (bool, error) {
-	client := &http.Client{}
-	req, _ := http.NewRequest("GET", i.url.String(), nil)
-	req.Header.Set("Range", "bytes=0-7")
-	response, err := client.Do(req)
-
-	if err != nil {
-		return false, err
-	}
-	defer response.Body.Close()
-
-	if response.StatusCode != http.StatusPartialContent {
-		return false, fmt.Errorf(
-			"can't retrieve partial header of resource to determine file type: %s - %s",
-			i.url.String(),
-			response.Status)
-	}
-
-	header, err := io.ReadAll(response.Body)
-	if err != nil {
-		return false, err
-	}
-
-	if len(header) < 8 {
-		return false, fmt.Errorf(
-			"can't retrieve read header of resource to determine file type: %s - %d bytes read",
-			i.url.String(),
-			len(header))
-	}
-
-	return isQCOW2Header(header)
+	return strings.ToLower(strings.TrimPrefix(path.Ext(i.url.Path), ".")) == "qcow2", nil
 }
 
-func (i *httpImage) Import(copier func(io.Reader) error, vol libvirtxml.StorageVolume) error {
+func (i *httpImage) Import(uploader func(io.Reader) error, vol libvirtxml.StorageVolume) error {
 	// number of download retries on non client errors (eg. 5xx)
 	const maxHTTPRetries int = 3
 	// wait time between retries
@@ -166,7 +139,6 @@ func (i *httpImage) Import(copier func(io.Reader) error, vol libvirtxml.StorageV
 
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", i.url.String(), nil)
-
 	if err != nil {
 		log.Printf("[DEBUG:] Error creating new request for source url %s: %s", i.url.String(), err)
 		return fmt.Errorf("error while downloading %s: %w", i.url.String(), err)
@@ -188,7 +160,7 @@ func (i *httpImage) Import(copier func(io.Reader) error, vol libvirtxml.StorageV
 		if response.StatusCode == http.StatusNotModified {
 			return nil
 		} else if response.StatusCode == http.StatusOK {
-			return copier(response.Body)
+			return uploader(response.Body)
 		} else if response.StatusCode < http.StatusInternalServerError {
 			break
 		} else if retryCount < maxHTTPRetries {
@@ -228,7 +200,8 @@ func newImage(source string) (image, error) {
 }
 
 // isQCOW2Header returns True when the buffer starts with the qcow2 header.
-//nolint:gomnd
+//
+//nolint:mnd
 func isQCOW2Header(buf []byte) (bool, error) {
 	if len(buf) < 8 {
 		return false, fmt.Errorf("expected header of 8 bytes. Got %d", len(buf))
@@ -237,7 +210,6 @@ func isQCOW2Header(buf []byte) (bool, error) {
 		buf[2] == 'I' && buf[3] == 0xfb &&
 		buf[4] == 0x00 && buf[5] == 0x00 &&
 		buf[6] == 0x00 && buf[7] == 0x03 {
-
 		return true, nil
 	}
 	return false, nil

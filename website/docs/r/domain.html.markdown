@@ -66,6 +66,7 @@ The following arguments are supported:
 * `emulator` - (Optional) The path of the emulator to use
 * `qemu_agent` (Optional) By default is disabled, set to true for enabling it. More info [qemu-agent](https://wiki.libvirt.org/page/Qemu_guest_agent).
 * `tpm` (Optional) TPM device to attach to the domain. The `tpm` object structure is documented [below](#tpm-device).
+* `type` (Optional) The type of hypervisor to use for the domain.  Defaults to `kvm`, other values can be found [here](https://libvirt.org/formatdomain.html#id1)
 ### Kernel and boot arguments
 
 * `kernel` - (Optional) The path of the kernel to boot
@@ -347,7 +348,7 @@ When using a virtual network, users can specify:
   provider.
 * `network_id` - (Optional) The ID of a network resource to attach this
   interface to. This is a
-  [network resource](/website/docs/r/network.markdown) managed by the
+  [network resource](/website/docs/r/network.html.markdown) managed by the
   Terraform libvirt provider.
 * `mac` - (Optional) The specific MAC address to use for this interface.
 * `addresses` - (Optional) An IP address for this domain in this network.
@@ -378,6 +379,8 @@ When connecting to a LAN, users can specify a target device with:
   sent to the VF/IF of the configured network device. Depending on the
   capabilities of the device additional prerequisites or limitations may apply;
   for example, on Linux this requires kernel 2.6.38 or newer.
+* `private` -  All packets are sent to the external bridge and will only be delivered to a target VM on the same host if they are sent through an external router or gateway and that device sends them back to the host. This procedure is followed if either the source or destination device is in private mode.
+
 
 Example of a `macvtap` interface:
 
